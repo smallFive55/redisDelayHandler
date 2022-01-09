@@ -36,19 +36,19 @@ public class MiddleRedisConfig {
 
     private @Value("${spring.redis.jedis.pool.database:0}")
     int database;
-    private @Value("${spring.redis.jedis.pool.max-active}")
+    private @Value("${spring.redis.jedis.pool.max-active:10}")
     int maxTotal;
-    private @Value("${spring.redis.jedis.pool.max-wait}")
+    private @Value("${spring.redis.jedis.pool.max-wait:10}")
     int maxWait;
-    private @Value("${spring.redis.jedis.pool.max-idle}")
+    private @Value("${spring.redis.jedis.pool.max-idle:10}")
     int maxIdle;
-    private @Value("${spring.redis.jedis.pool.min-idle}")
+    private @Value("${spring.redis.jedis.pool.min-idle:1}")
     int minIdle;
     private @Value("${spring.redis.host}")
     String hostName;
     private @Value("${spring.redis.port:6379}")
     int port;
-    private @Value("${spring.redis.password}")
+    private @Value("${spring.redis.password:}")
     String password;
 
 
