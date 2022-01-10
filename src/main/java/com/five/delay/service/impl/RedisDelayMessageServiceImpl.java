@@ -44,24 +44,28 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
     @Override
     public void sendMessage(DelayMessage delayMessage, String pollMode, String appointKey) throws Exception {
         // 获得延迟任务配置的key
-        String key = delayHandlerProcessor.delayKeyMaps.get(delayMessage.getDelayName());
-        if (StrUtil.isEmpty(key) && StrUtil.isEmpty(appointKey)) {
-            if (StrUtil.isEmpty(pollMode)) {
-                // 如果未指定模式，则使用默认模型，否则使用exclusive模型独立轮询
-                pollMode = DelayPollModeConf.MODE_EXCLUSIVE;
+        Object key = redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_KEYS_MAP_KEY, delayMessage.getDelayName());
+        if (null == key) {
+            if (StrUtil.isEmpty(appointKey)) {
+                if (StrUtil.isEmpty(pollMode)) {
+                    // 如果未指定模式，则使用默认模型，否则使用exclusive模型独立轮询
+                    pollMode = DelayPollModeConf.MODE_EXCLUSIVE;
+                }
+                if (DelayPollModeConf.MODE_EXCLUSIVE.equals(pollMode) || DelayPollModeConf.MODE_CUSTOMIZE.equals(pollMode)) {
+                    key = delayMessage.getDelayName();
+                } else if (DelayPollModeConf.MODE_PUBLIC.equals(pollMode)) {
+                    key = DelayPollModeConf.PUBLIC_MODE_KEY;
+                } else {
+                    throw new Exception("延迟消息添加失败，错误的Mode:"+pollMode);
+                }
+            } else {
+                key = appointKey;
             }
-            if (DelayPollModeConf.MODE_EXCLUSIVE.equals(pollMode) || DelayPollModeConf.MODE_CUSTOMIZE.equals(pollMode)) {
-                key = delayMessage.getDelayName();
-            } else if (DelayPollModeConf.MODE_PUBLIC.equals(pollMode)) {
-                key = DelayPollModeConf.PUBLIC_MODE_KEY;
-            }
-        } else if (StrUtil.isEmpty(key) && StrUtil.isNotEmpty(appointKey)) {
-            key = appointKey;
         }
         try {
             // Element 序列化
             Element value = new Element(delayMessage.getDelayName(), delayMessage.getValue());
-            redisTemplate.opsForZSet().add(key, value, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
+            redisTemplate.opsForZSet().add(String.valueOf(key), value, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
             logger.info(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"延迟任务添加成功..."+delayMessage);
         } catch (Exception e) {
             logger.error("延迟任务添加失败..."+e.getMessage());

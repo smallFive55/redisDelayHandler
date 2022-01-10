@@ -6,9 +6,11 @@ import com.five.delay.annotation.DelayListener;
 import com.five.delay.conf.DelayPollModeConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -27,14 +29,14 @@ import java.util.concurrent.TimeUnit;
 public class DelayHandlerProcessor implements ApplicationListener<ContextRefreshedEvent> {
     private static Logger logger = LoggerFactory.getLogger(DelayHandlerProcessor.class);
 
-    // 延迟任务与信息存储的key的映射
-    public HashMap<String, String> delayKeyMaps = new HashMap<String, String>();
     // 延迟任务执行器，待优化
     private ScheduledThreadPoolExecutor executorService = new ScheduledThreadPoolExecutor(10, new ThreadFactoryBuilder() .setNamePrefix("test-").build());
-    // DelayListener 封装集合
-    private HashMap<String, MethodDelayHandlerEndpoint> delayListenerEndpoints = new HashMap<String, MethodDelayHandlerEndpoint>();
-    // 根据 DelayListener 配置获取所有key
+    // 本地 DelayListener 封装集合
+    protected HashMap<String, MethodDelayHandlerEndpoint> delayListenerEndpoints = new HashMap<String, MethodDelayHandlerEndpoint>();
+    // 根据本地 DelayListener 配置获取所有key
     private Set<String> keys = new HashSet<String>();
+    @Autowired
+    private RedisTemplate redisTemplate;
 
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
@@ -72,6 +74,11 @@ public class DelayHandlerProcessor implements ApplicationListener<ContextRefresh
         String mode = delayListener.mode();
         String key = delayListener.key();
 
+        // 1.delayName应该是独一无二的
+        if (delayListenerEndpoints.containsKey(delayName)) {
+            logger.error("不允许配置相同的延迟任务名");
+        }
+
         if (StrUtil.isEmpty(mode) || mode.equals(DelayPollModeConf.MODE_EXCLUSIVE)) {
             // 独立的轮询线程
             key = delayName;
@@ -85,7 +92,7 @@ public class DelayHandlerProcessor implements ApplicationListener<ContextRefresh
             logger.error("mode配置错误");
         }
         keys.add(key);
-        delayKeyMaps.put(delayName, key);
+        redisTemplate.opsForHash().put(DelayPollModeConf.DELAY_KEYS_MAP_KEY, delayName, key);
         delayListenerEndpoints.put(delayName, new MethodDelayHandlerEndpoint(delayName, key, method, bean));
     }
 

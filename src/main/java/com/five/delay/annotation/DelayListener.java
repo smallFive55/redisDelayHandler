@@ -15,6 +15,10 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface DelayListener {
 
+    /**
+     * 延迟任务名称
+     * @return
+     */
     String name();
 
     /**

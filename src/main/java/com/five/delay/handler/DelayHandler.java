@@ -1,7 +1,6 @@
 package com.five.delay.handler;
 
 import cn.hutool.core.thread.ThreadFactoryBuilder;
-import cn.hutool.core.util.StrUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -86,12 +85,12 @@ public class DelayHandler {
                         ZSetOperations.TypedTuple<Element> typedTuple = (ZSetOperations.TypedTuple<Element>) (zrangeWithScores.toArray()[i]);
                         Element element = typedTuple.getValue();
                         // 判断本地服务是否能够消费该消息？主要是default、customize两钟模式下可能无法消费该消息的情况
-                        if (StrUtil.isEmpty(delayHandlerProcessor.delayKeyMaps.get(element.getDelayName()))) {
-                            repeat ++;
-                            continue;
+                        if (!delayHandlerProcessor.delayListenerEndpoints.containsKey(element.getDelayName())) {
+                            repeat++;
+                        } else {
+                            // 处理超时消息
+                            processTimeout(key, typedTuple);
                         }
-                        // 处理超时消息
-                        processTimeout(key, typedTuple);
                     }
                 } else {
                     // 表示当前队列尾空队列，可以适当降低轮询评率

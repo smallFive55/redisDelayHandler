@@ -22,4 +22,9 @@ public interface DelayPollModeConf {
 
     // 公共轮询任务名
     String PUBLIC_MODE_KEY = "delay.task.public";
+
+    /**
+     * 延迟任务与信息存储的key的映射关系
+     */
+    String DELAY_KEYS_MAP_KEY = "delay.keys.map";
 }
