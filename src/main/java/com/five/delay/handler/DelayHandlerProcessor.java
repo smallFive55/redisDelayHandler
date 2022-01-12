@@ -4,12 +4,12 @@ import cn.hutool.core.thread.ThreadFactoryBuilder;
 import cn.hutool.core.util.StrUtil;
 import com.five.delay.annotation.DelayListener;
 import com.five.delay.conf.DelayPollModeConf;
+import com.five.delay.utils.SpringContextUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationListener;
-import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import java.lang.reflect.InvocationTargetException;
@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * @remark
  */
 @Component
-public class DelayHandlerProcessor implements ApplicationListener<ContextRefreshedEvent> {
+public class DelayHandlerProcessor implements CommandLineRunner {
     private static Logger logger = LoggerFactory.getLogger(DelayHandlerProcessor.class);
 
     // 延迟任务执行器，待优化
@@ -37,31 +37,6 @@ public class DelayHandlerProcessor implements ApplicationListener<ContextRefresh
     private Set<String> keys = new HashSet<String>();
     @Autowired
     private RedisTemplate redisTemplate;
-
-    @Override
-    public void onApplicationEvent(ContextRefreshedEvent event) {
-        // 启动时通过Spring容器获取延迟任务
-        ApplicationContext applicationContext = event.getApplicationContext();
-        if(applicationContext.getParent()==null){
-            Map<String,Object> beans = applicationContext.getBeansWithAnnotation(Component.class);
-            for(Object bean:beans.values()){
-                for (Method method : bean.getClass().getMethods()) {
-                    if (method.isAnnotationPresent(DelayListener.class)) {
-                        analyseDelay(method, bean);
-                    }
-                }
-            }
-
-            // 根据获取的延迟任务处理器，执行任务轮询
-            if (!keys.isEmpty()) {
-                DelayHandler handler = applicationContext.getBean(DelayHandler.class);
-                Iterator<String> iterator = keys.iterator();
-                while(iterator.hasNext()) {
-                    handler.poll(iterator.next());
-                }
-            }
-        }
-    }
 
     /**
      * 解析延迟任务方法配置
@@ -114,5 +89,30 @@ public class DelayHandlerProcessor implements ApplicationListener<ContextRefresh
                 }
             }
         },0, TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+        // 启动时通过Spring容器获取延迟任务
+        ApplicationContext applicationContext = SpringContextUtils.applicationContext;
+        if(applicationContext != null){
+            Map<String,Object> beans = applicationContext.getBeansWithAnnotation(Component.class);
+            for(Object bean:beans.values()){
+                for (Method method : bean.getClass().getMethods()) {
+                    if (method.isAnnotationPresent(DelayListener.class)) {
+                        analyseDelay(method, bean);
+                    }
+                }
+            }
+
+            // 根据获取的延迟任务处理器，执行任务轮询
+            if (!keys.isEmpty()) {
+                DelayHandler handler = applicationContext.getBean(DelayHandler.class);
+                Iterator<String> iterator = keys.iterator();
+                while(iterator.hasNext()) {
+                    handler.poll(iterator.next());
+                }
+            }
+        }
     }
 }
