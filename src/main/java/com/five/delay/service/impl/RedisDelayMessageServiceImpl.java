@@ -63,7 +63,6 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
             }
         }
         try {
-            // Element 序列化
             Element value = new Element(delayMessage.getDelayName(), delayMessage.getValue());
             redisTemplate.opsForZSet().add(String.valueOf(key), value, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
             logger.info(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"延迟任务添加成功..."+delayMessage);

@@ -120,13 +120,11 @@ public class DelayHandler {
      */
     void processTimeout(String key, ZSetOperations.TypedTuple<Element> typedTuple){
         if (null != typedTuple && typedTuple.getScore() <= System.currentTimeMillis()) {
-            // Element反序列化
             Element element = typedTuple.getValue();
-            Object value = element.getValue();
             Long zrem = redisTemplate.opsForZSet().remove(key, element);
             if(zrem!=null && zrem>0){
                 // 如果元素删除成功，表示任务被当前节点处理
-                delayHandlerProcessor.process(element.getDelayName(), value);
+                delayHandlerProcessor.process(element.getDelayName(), key, typedTuple);
             }
         }
     }
