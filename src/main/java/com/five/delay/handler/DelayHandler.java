@@ -29,9 +29,13 @@ import java.util.concurrent.TimeUnit;
 public class DelayHandler {
     private static Logger logger = LoggerFactory.getLogger(DelayHandler.class);
 
+    // 本地轮询任务初始化延迟时长
     private int initialDelay = 1;
-    private int pollTimeout = 1;
+    // 本地轮询间隙时长
+    private int period = 1;
+    // 本地轮询任务核心线程数
     private int corePoolSize = 10;
+    // 本地轮询任务线程名前缀
     private String threadPrefix = "sync-five.delayHandler-pool";
 
     private TimeUnit timeUnit = TimeUnit.MILLISECONDS;
@@ -59,7 +63,7 @@ public class DelayHandler {
                 }
             }
         }
-        executorService.scheduleAtFixedRate(new PollWorker(key), initialDelay, pollTimeout, timeUnit);
+        executorService.scheduleAtFixedRate(new PollWorker(key), initialDelay, period, timeUnit);
     }
 
     class PollWorker implements Runnable {
@@ -131,8 +135,8 @@ public class DelayHandler {
         this.initialDelay = initialDelay;
     }
 
-    public void setPollTimeout(int pollTimeout) {
-        this.pollTimeout = pollTimeout;
+    public void setPeriod(int period) {
+        this.period = period;
     }
 
     public void setCorePoolSize(int corePoolSize) {
