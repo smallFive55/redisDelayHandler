@@ -68,7 +68,7 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
             redisTemplate.opsForZSet().add(String.valueOf(key), value, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
             logger.info(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"延迟任务添加成功..."+delayMessage);
         } catch (Exception e) {
-            logger.error("延迟任务添加失败..."+e.getMessage());
+            throw new Exception("延迟任务添加失败..."+e.getMessage());
         }
     }
 
