@@ -35,6 +35,8 @@ public class DelayHandler {
     private int period = 1000;
     // 本地轮询任务核心线程数
     private int corePoolSize = 10;
+    // 每次轮询任务从redis中取出数据条数
+    private int batchSize = 10;
     // 本地轮询任务线程名前缀
     private String threadPrefix = "sync-five.delayHandler-pool";
 
@@ -76,7 +78,7 @@ public class DelayHandler {
         @Override
         public void run() {
             int repeat = 0;
-            int quantity = 9;
+            int quantity = batchSize - 1;
             if (!zrangQuantityMap.isEmpty() && zrangQuantityMap.containsKey(key)) {
                 quantity = zrangQuantityMap.get(key);
             }
@@ -106,7 +108,7 @@ public class DelayHandler {
             }
             // 更新range quantity值
             if (repeat > 0) {
-                zrangQuantityMap.put(key, repeat + 9);
+                zrangQuantityMap.put(key, repeat + batchSize - 1);
             } else {
                 zrangQuantityMap.remove(key);
             }
@@ -143,4 +145,7 @@ public class DelayHandler {
         this.threadPrefix = threadPrefix;
     }
 
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
+    }
 }

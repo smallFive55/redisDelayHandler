@@ -2,7 +2,7 @@
 
 #### 介绍
 实现redis延迟（延时）任务处理器（设计中）。
-针对[delayMessage](https://github.com/smallFive55/delayMessage)项目中的Redis延迟任务实现方案，简化其延迟任务处理的逻辑复杂度，增强部分其他功能
+针对delayMessage项目中的Redis延迟任务实现方案，简化其延迟任务处理的逻辑复杂度，增强部分其他功能
 
 #### 优势
 相比于RabbitMQ，该项目的优势在于可以在同一个key中处理多个不同逻辑、不同延迟时间的任务。
@@ -44,9 +44,10 @@ spring:
         min-idle: 1
 delay:
   handler:
-    initialDelay: 5000  # 毫秒，项目初始化时，启动轮询任务的延迟时间
-    period: 2000        # 毫秒，轮询任务时间间隔
-    corePoolSize: 10    # 轮询任务核心线程数配置
+    initialDelay: 1000  # 毫秒，项目初始化时，启动轮询任务的延迟时间，默认1000毫秒
+    period: 1000        # 毫秒，轮询任务时间间隔，默认1000毫秒
+    corePoolSize: 10    # 轮询任务核心线程数配置，默认10个
+    batchSize: 10       # 每次轮询任务从redis中取出数据条数，默认10条
     threadPrefix: sync-five.delayHandler-pool  # 轮询任务线程名称前缀
 ```
 
