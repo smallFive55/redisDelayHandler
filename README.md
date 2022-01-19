@@ -45,7 +45,7 @@ spring:
 delay:
   handler:
     initialDelay: 5000  # 毫秒，项目初始化时，启动轮询任务的延迟时间
-    pollTimeout: 2000   # 毫秒，轮询任务时间间隔
+    period: 2000        # 毫秒，轮询任务时间间隔
     corePoolSize: 10    # 轮询任务核心线程数配置
     threadPrefix: sync-five.delayHandler-pool  # 轮询任务线程名称前缀
 ```
@@ -84,7 +84,6 @@ public class TestDelayHandler {
 #### TODO LIST
 * [x] 支持三种任务轮询模式
 * [x] 支持消息类型多样化
-* [ ] 消息序列化优化
-* [ ] 任务失败处理机制
+* [x] 任务失败处理机制（处理中）
 * [ ] 当前没有任务时，降低轮询的频率
 * [ ] 轮询性能优化

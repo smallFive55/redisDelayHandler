@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -87,18 +88,23 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         return delayName;
     }
 
-    public void process(String delayName, Object value){
+    public void process(String delayName, String key, ZSetOperations.TypedTuple<Element>  typedTuple){
         executorService.schedule(new Runnable() {
             @Override
             public void run() {
                 try {
                     Method method = delayListenerEndpoints.get(delayName).getMethod();
                     try {
-                        method.invoke(delayListenerEndpoints.get(delayName).getObj(), value);
+                        method.invoke(delayListenerEndpoints.get(delayName).getObj(), typedTuple.getValue().getValue());
                     } catch (IllegalAccessException e) {
                         e.printStackTrace();
+                        // 非法调用
+                        redisTemplate.opsForZSet().add(key, typedTuple.getValue(), typedTuple.getScore());
                     } catch (InvocationTargetException e) {
                         e.printStackTrace();
+                        // 调用异常
+                        // TODO 可配置消费失败处理策略【直接抛弃、重试次数】
+                        redisTemplate.opsForZSet().add(key, typedTuple.getValue(), typedTuple.getScore());
                     }
                 } catch (Exception e) {
                     logger.error("处理器调用异常："+e.getMessage());
