@@ -30,9 +30,9 @@ public class DelayHandler {
     private static Logger logger = LoggerFactory.getLogger(DelayHandler.class);
 
     // 本地轮询任务初始化延迟时长
-    private int initialDelay = 1;
+    private int initialDelay = 1000;
     // 本地轮询间隙时长
-    private int period = 1;
+    private int period = 1000;
     // 本地轮询任务核心线程数
     private int corePoolSize = 10;
     // 本地轮询任务线程名前缀
@@ -91,7 +91,7 @@ public class DelayHandler {
                         // 判断本地服务是否能够消费该消息？主要是default、customize两钟模式下可能无法消费该消息的情况
                         if (!delayHandlerProcessor.delayListenerEndpoints.containsKey(element.getDelayName())) {
                             repeat++;
-                        } else {
+                        } else if (typedTuple.getScore() <= System.currentTimeMillis()) {
                             // 处理超时消息
                             processTimeout(key, typedTuple);
                         }
@@ -119,13 +119,11 @@ public class DelayHandler {
      * @param typedTuple
      */
     void processTimeout(String key, ZSetOperations.TypedTuple<Element> typedTuple){
-        if (null != typedTuple && typedTuple.getScore() <= System.currentTimeMillis()) {
-            Element element = typedTuple.getValue();
-            Long zrem = redisTemplate.opsForZSet().remove(key, element);
-            if(zrem!=null && zrem>0){
-                // 如果元素删除成功，表示任务被当前节点处理
-                delayHandlerProcessor.process(element.getDelayName(), key, typedTuple);
-            }
+        Element element = typedTuple.getValue();
+        Long zrem = redisTemplate.opsForZSet().remove(key, element);
+        if(zrem!=null && zrem>0){
+            // 如果元素删除成功，表示任务被当前节点处理
+            delayHandlerProcessor.process(element.getDelayName(), key, typedTuple);
         }
     }
 

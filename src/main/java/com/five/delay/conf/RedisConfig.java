@@ -32,7 +32,7 @@ import redis.clients.jedis.JedisPoolConfig;
 
 @Configuration
 @ConditionalOnMissingBean(name = "redisTemplate")
-public class MiddleRedisConfig {
+public class RedisConfig {
 
     private @Value("${spring.redis.jedis.pool.database:0}")
     int database;
