@@ -35,11 +35,38 @@ public class DelayHandlerProcessor implements CommandLineRunner {
     // 延迟任务执行器，待优化
     private ScheduledThreadPoolExecutor executorService = new ScheduledThreadPoolExecutor(10, new ThreadFactoryBuilder() .setNamePrefix("test-").build());
     // 本地 DelayListener 封装集合
-    public HashMap<String, MethodDelayHandlerEndpoint> delayListenerEndpoints = new HashMap<String, MethodDelayHandlerEndpoint>();
+    protected Set<String> delays = new HashSet<String>();
     // 根据本地 DelayListener 配置获取所有key
     private Set<String> keys = new HashSet<String>();
     @Autowired
     private RedisTemplate redisTemplate;
+
+    @Override
+    public void run(String... args) throws Exception {
+        // 启动时通过Spring容器获取延迟任务
+        ApplicationContext applicationContext = SpringContextUtils.applicationContext;
+        logger.info("服务启动："+applicationContext.getId());
+
+        if(applicationContext != null){
+            Map<String,Object> beans = applicationContext.getBeansWithAnnotation(Component.class);
+            for(Object bean:beans.values()){
+                for (Method method : bean.getClass().getMethods()) {
+                    if (method.isAnnotationPresent(DelayListener.class)) {
+                        analyseDelay(method, bean);
+                    }
+                }
+            }
+
+            // 根据获取的延迟任务处理器，执行任务轮询
+            if (!keys.isEmpty()) {
+                DelayHandler handler = applicationContext.getBean(DelayHandler.class);
+                Iterator<String> iterator = keys.iterator();
+                while(iterator.hasNext()) {
+                    handler.poll(iterator.next());
+                }
+            }
+        }
+    }
 
     /**
      * 解析延迟任务方法配置
@@ -57,7 +84,7 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         int retryDelay = delayListener.retryDelay();
 
         // 1.delayName应该是独一无二的
-        if (delayListenerEndpoints.containsKey(delayName)) {
+        if (delays.contains(delayName)) {
             throw new Exception("不允许在本地配置相同的延迟任务名[\"+delayName+\"]");
         }
 
@@ -80,26 +107,26 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         // 保证在不同的服务中，延迟任务全局只有唯一的消费窗口，允许在同一服务的不同节点消费
         String contextId = SpringContextUtils.applicationContext.getId();
 
-        Object hasKey = redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_NAME_APPLICATION_MAP_KEY, delayName);
-        if (hasKey != null && !contextId.equals(String.valueOf(hasKey))){
+        MethodDelayHandlerEndpoint endpoint = (MethodDelayHandlerEndpoint) redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, delayName);
+        if (endpoint != null && StrUtil.isNotEmpty(endpoint.getConsumeContextId()) && !contextId.equals(endpoint.getConsumeContextId())){
             // 存在相同的delayName，且contextId不同时，错误。如果是由于主动修改了contextId导致，可以删除delay.application.map中指定的K/V
-            throw new Exception("延迟任务[" + delayName + "]在服务"+hasKey+"中已存在消费窗口！");
+            throw new Exception("延迟任务[" + delayName + "]在服务"+endpoint.getConsumeContextId()+"中已存在消费窗口！");
         }
-        redisTemplate.opsForHash().put(DelayPollModeConf.DELAY_NAME_APPLICATION_MAP_KEY, delayName, contextId);
         keys.add(key);
-        redisTemplate.opsForHash().put(DelayPollModeConf.DELAY_KEYS_MAP_KEY, delayName, key);
-        delayListenerEndpoints.put(delayName, new MethodDelayHandlerEndpoint(delayName, key, retry, retryDelay, method, bean));
+        endpoint = new MethodDelayHandlerEndpoint(delayName, key, retry, retryDelay, contextId, method.getName(), method.getParameterTypes(), bean);
+        delays.add(delayName);
+        redisTemplate.opsForHash().put(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, delayName, endpoint);
         return delayName;
     }
 
-    public void process(String delayName, String key, ZSetOperations.TypedTuple<DelayElement>  typedTuple){
+    public void process(String key, ZSetOperations.TypedTuple<DelayElement>  typedTuple){
         executorService.schedule(new Runnable() {
             @Override
             public void run() {
                 DelayElement element = typedTuple.getValue();
                 try {
-                    MethodDelayHandlerEndpoint delayHandlerEndpoint = delayListenerEndpoints.get(delayName);
-                    Method method = delayHandlerEndpoint.getMethod();
+                    MethodDelayHandlerEndpoint delayHandlerEndpoint = (MethodDelayHandlerEndpoint) redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, element.getDelayName());
+                    Method method = delayHandlerEndpoint.getObj().getClass().getMethod(delayHandlerEndpoint.getMethodName(), delayHandlerEndpoint.getParameterTypes());
                     try {
                         method.invoke(delayHandlerEndpoint.getObj(), element.getValue());
                     } catch (IllegalAccessException e) {
@@ -130,30 +157,4 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         },0, TimeUnit.MILLISECONDS);
     }
 
-    @Override
-    public void run(String... args) throws Exception {
-        // 启动时通过Spring容器获取延迟任务
-        ApplicationContext applicationContext = SpringContextUtils.applicationContext;
-        logger.info("服务启动："+applicationContext.getId());
-
-        if(applicationContext != null){
-            Map<String,Object> beans = applicationContext.getBeansWithAnnotation(Component.class);
-            for(Object bean:beans.values()){
-                for (Method method : bean.getClass().getMethods()) {
-                    if (method.isAnnotationPresent(DelayListener.class)) {
-                        analyseDelay(method, bean);
-                    }
-                }
-            }
-
-            // 根据获取的延迟任务处理器，执行任务轮询
-            if (!keys.isEmpty()) {
-                DelayHandler handler = applicationContext.getBean(DelayHandler.class);
-                Iterator<String> iterator = keys.iterator();
-                while(iterator.hasNext()) {
-                    handler.poll(iterator.next());
-                }
-            }
-        }
-    }
 }

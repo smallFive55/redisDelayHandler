@@ -1,7 +1,9 @@
 package com.five.delay.handler;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.five.delay.annotation.DelayListener;
-import java.lang.reflect.Method;
+
+import java.io.Serializable;
 
 /**
  * 封装被 {@link DelayListener} 注解的延时任务处理器
@@ -9,16 +11,21 @@ import java.lang.reflect.Method;
  * @date 2021-12-31 14:39
  * @remark
  */
-public class MethodDelayHandlerEndpoint {
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class MethodDelayHandlerEndpoint implements Serializable {
 
     /**
      * 延迟任务任务名称
      */
     private String delayName;
     /**
-     * 延迟任务处理方法
+     * 延迟任务处理方法名
      */
-    private Method method;
+    private String methodName;
+    /**
+     * 延迟任务处理方法参数
+     */
+    private Class<?>[] parameterTypes;
     /**
      * 任务方法所属实例
      */
@@ -37,17 +44,35 @@ public class MethodDelayHandlerEndpoint {
      */
     private int retryDelay;
 
-    public MethodDelayHandlerEndpoint(String delayName, String key, int retry, int retryDelay, Method method, Object obj) {
+    /**
+     * 任务消费的容器ID
+     */
+    private String consumeContextId;
+
+    public MethodDelayHandlerEndpoint() {
+    }
+
+    public MethodDelayHandlerEndpoint(String delayName, String key, int retry, int retryDelay, String consumeContextId, String methodName, Class<?>[] parameterTypes, Object obj) {
         this.delayName = delayName;
         this.key = key;
         this.retry = retry;
         this.retryDelay = retryDelay;
-        this.method = method;
+        this.consumeContextId = consumeContextId;
+        this.methodName = methodName;
+        this.parameterTypes = parameterTypes;
         this.obj = obj;
     }
 
-    public Method getMethod() {
-        return method;
+    public String getDelayName() {
+        return delayName;
+    }
+
+    public String getMethodName() {
+        return methodName;
+    }
+
+    public Class<?>[] getParameterTypes() {
+        return parameterTypes;
     }
 
     public Object getObj() {
@@ -65,4 +90,9 @@ public class MethodDelayHandlerEndpoint {
     public int getRetryDelay() {
         return retryDelay;
     }
+
+    public String getConsumeContextId() {
+        return consumeContextId;
+    }
+
 }

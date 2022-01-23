@@ -101,11 +101,11 @@ public class DelayHandler {
                             ZSetOperations.TypedTuple<DelayElement> typedTuple = (ZSetOperations.TypedTuple<DelayElement>) (zrangeWithScores.toArray()[i]);
                             DelayElement element = typedTuple.getValue();
                             // 判断本地服务是否能够消费该消息？主要是default、customize两钟模式下可能无法消费该消息的情况
-                            if (!delayHandlerProcessor.delayListenerEndpoints.containsKey(element.getDelayName())) {
+                            if (!delayHandlerProcessor.delays.contains(element.getDelayName())) {
                                 repeat++;
                             } else if (typedTuple.getScore() <= System.currentTimeMillis()) {
-                                // 处理超时消息
-                                processTimeout(key, typedTuple);
+                                // 处理超时任务
+                                processDelayTask(key, typedTuple);
                             }
                         }
                     } else {
@@ -133,12 +133,12 @@ public class DelayHandler {
      * @param key
      * @param typedTuple
      */
-    void processTimeout(String key, ZSetOperations.TypedTuple<DelayElement> typedTuple){
+    void processDelayTask(String key, ZSetOperations.TypedTuple<DelayElement> typedTuple){
         DelayElement element = typedTuple.getValue();
         Long zrem = redisTemplate.opsForZSet().remove(key, element);
         if(zrem!=null && zrem>0){
             // 如果元素删除成功，表示任务被当前节点处理
-            delayHandlerProcessor.process(element.getDelayName(), key, typedTuple);
+            delayHandlerProcessor.process(key, typedTuple);
         }
     }
 

@@ -3,7 +3,6 @@ package com.five.delay.service.impl;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.five.delay.conf.DelayPollModeConf;
-import com.five.delay.handler.DelayHandlerProcessor;
 import com.five.delay.handler.bean.DelayMessage;
 import com.five.delay.handler.bean.DelayElement;
 import com.five.delay.handler.MethodDelayHandlerEndpoint;
@@ -29,8 +28,6 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
 
     @Autowired
     private RedisTemplate redisTemplate;
-    @Autowired
-    private DelayHandlerProcessor delayHandlerProcessor;
 
     @Override
     public void sendMessage(DelayMessage delayMessage) throws Exception {
@@ -45,8 +42,9 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
     @Override
     public void sendMessage(DelayMessage delayMessage, String pollMode, String appointKey) throws Exception {
         // 获得延迟任务配置的key
-        Object key = redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_KEYS_MAP_KEY, delayMessage.getDelayName());
-        if (null == key) {
+        MethodDelayHandlerEndpoint endpoint = (MethodDelayHandlerEndpoint) redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, delayMessage.getDelayName());
+        String key;
+        if (null == endpoint || StrUtil.isEmpty(endpoint.getKey())) {
             if (StrUtil.isEmpty(appointKey)) {
                 if (StrUtil.isEmpty(pollMode)) {
                     // 如果未指定模式，则使用默认模型，否则使用exclusive模型独立轮询
@@ -62,14 +60,15 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
             } else {
                 key = appointKey;
             }
+        } else {
+            key = endpoint.getKey();
+        }
+        DelayElement element = new DelayElement(delayMessage.getDelayName(), delayMessage.getValue());
+        if (endpoint != null) {
+            element.setRetry(endpoint.getRetry());
+            element.setRetryDelay(endpoint.getRetryDelay());
         }
         try {
-            DelayElement element = new DelayElement(delayMessage.getDelayName(), delayMessage.getValue());
-            MethodDelayHandlerEndpoint delayHandlerEndpoint = delayHandlerProcessor.delayListenerEndpoints.get(delayMessage.getDelayName());
-            if (delayHandlerEndpoint != null) {
-                element.setRetry(delayHandlerEndpoint.getRetry());
-                element.setRetryDelay(delayHandlerEndpoint.getRetryDelay());
-            }
             redisTemplate.opsForZSet().add(String.valueOf(key), element, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
             logger.info(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"延迟任务添加成功..."+delayMessage);
         } catch (Exception e) {

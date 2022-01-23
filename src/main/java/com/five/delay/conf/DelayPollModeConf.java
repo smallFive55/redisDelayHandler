@@ -20,13 +20,20 @@ public interface DelayPollModeConf {
      */
     String MODE_EXCLUSIVE = "exclusive";
 
-    // 公共轮询任务名
+    /**
+     * 公共轮询任务名
+     */
     String PUBLIC_MODE_KEY = "delay.task.public";
 
     /**
-     * 延迟任务与信息存储的key的映射关系
+     * 延迟任务配置元信息
      */
-    String DELAY_KEYS_MAP_KEY = "delay.keys.map";
+    String DELAY_METADATA_HANDLER_MAP = "delay.meta.handler";
+
+//    /**
+//     * 延迟任务与信息存储的key的映射关系
+//     */
+//    String DELAY_KEYS_MAP_KEY = "delay.keys.map";
     /**
      * 延迟任务与Spring Context ID的映射关系，保证在不同的服务中，延迟任务全局只有唯一的消费窗口，允许在同一服务的不同节点消费
      */
