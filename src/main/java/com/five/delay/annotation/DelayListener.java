@@ -37,4 +37,15 @@ public @interface DelayListener {
      */
     String key() default "";
 
+    /**
+     * 配置任务处理失败重试次数，默认为3次。-1表示一直重试
+     * @return
+     */
+    int retry() default 3;
+
+    /**
+     * 配置任务处理失败重试间隔时间，单位为毫秒，默认为0毫秒
+     * @return
+     */
+    int retryDelay() default 0;
 }

@@ -13,6 +13,20 @@ public class Element implements Serializable {
     private String delayName;
 
     private Object value;
+    /**
+     * 配置任务处理失败重试次数，-1表示一直重试
+     */
+    private int retry;
+
+    /**
+     * 已重试次数
+     */
+    private int retried;
+
+    /**
+     * 配置任务处理失败重试间隔时间，单位为毫秒
+     */
+    private int retryDelay;
 
     public Element(){
     }
@@ -20,6 +34,13 @@ public class Element implements Serializable {
     public Element(String delayName, Object value){
         this.delayName = delayName;
         this.value = value;
+    }
+
+    public Element(String delayName, Object value, int retry, int retryDelay){
+        this.delayName = delayName;
+        this.value = value;
+        this.retry = retry;
+        this.retryDelay = retryDelay;
     }
 
     public String getDelayName() {
@@ -36,5 +57,29 @@ public class Element implements Serializable {
 
     public void setValue(Object value) {
         this.value = value;
+    }
+
+    public int getRetry() {
+        return retry;
+    }
+
+    public void setRetry(int retry) {
+        this.retry = retry;
+    }
+
+    public int getRetryDelay() {
+        return retryDelay;
+    }
+
+    public void setRetryDelay(int retryDelay) {
+        this.retryDelay = retryDelay;
+    }
+
+    public int getRetried() {
+        return retried;
+    }
+
+    public void setRetried(int retried) {
+        this.retried = retried;
     }
 }

@@ -4,6 +4,7 @@ import cn.hutool.core.thread.ThreadFactoryBuilder;
 import cn.hutool.core.util.StrUtil;
 import com.five.delay.annotation.DelayListener;
 import com.five.delay.conf.DelayPollModeConf;
+import com.five.delay.utils.CalendarUtils;
 import com.five.delay.utils.SpringContextUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +34,7 @@ public class DelayHandlerProcessor implements CommandLineRunner {
     // 延迟任务执行器，待优化
     private ScheduledThreadPoolExecutor executorService = new ScheduledThreadPoolExecutor(10, new ThreadFactoryBuilder() .setNamePrefix("test-").build());
     // 本地 DelayListener 封装集合
-    protected HashMap<String, MethodDelayHandlerEndpoint> delayListenerEndpoints = new HashMap<String, MethodDelayHandlerEndpoint>();
+    public HashMap<String, MethodDelayHandlerEndpoint> delayListenerEndpoints = new HashMap<String, MethodDelayHandlerEndpoint>();
     // 根据本地 DelayListener 配置获取所有key
     private Set<String> keys = new HashSet<String>();
     @Autowired
@@ -51,6 +52,8 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         String delayName = delayListener.name();
         String mode = delayListener.mode();
         String key = delayListener.key();
+        int retry = delayListener.retry();
+        int retryDelay = delayListener.retryDelay();
 
         // 1.delayName应该是独一无二的
         if (delayListenerEndpoints.containsKey(delayName)) {
@@ -84,7 +87,7 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         redisTemplate.opsForHash().put(DelayPollModeConf.DELAY_NAME_APPLICATION_MAP_KEY, delayName, contextId);
         keys.add(key);
         redisTemplate.opsForHash().put(DelayPollModeConf.DELAY_KEYS_MAP_KEY, delayName, key);
-        delayListenerEndpoints.put(delayName, new MethodDelayHandlerEndpoint(delayName, key, method, bean));
+        delayListenerEndpoints.put(delayName, new MethodDelayHandlerEndpoint(delayName, key, retry, retryDelay, method, bean));
         return delayName;
     }
 
@@ -92,22 +95,35 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         executorService.schedule(new Runnable() {
             @Override
             public void run() {
+                Element element = typedTuple.getValue();
                 try {
-                    Method method = delayListenerEndpoints.get(delayName).getMethod();
+                    MethodDelayHandlerEndpoint delayHandlerEndpoint = delayListenerEndpoints.get(delayName);
+                    Method method = delayHandlerEndpoint.getMethod();
                     try {
-                        method.invoke(delayListenerEndpoints.get(delayName).getObj(), typedTuple.getValue().getValue());
+                        method.invoke(delayHandlerEndpoint.getObj(), element.getValue());
                     } catch (IllegalAccessException e) {
                         e.printStackTrace();
                         // 非法调用
-                        redisTemplate.opsForZSet().add(key, typedTuple.getValue(), typedTuple.getScore());
+                        if (element.getRetried() < element.getRetry() || -1 == element.getRetry()) {
+                            element.setRetried(element.getRetried() + 1);
+                            redisTemplate.opsForZSet().add(key, element, CalendarUtils.getCurrentTimeInMillis(element.getRetryDelay(), Calendar.MILLISECOND));
+                        }
                     } catch (InvocationTargetException e) {
                         e.printStackTrace();
                         // 调用异常
-                        // TODO 可配置消费失败处理策略【直接抛弃、重试次数】
-                        redisTemplate.opsForZSet().add(key, typedTuple.getValue(), typedTuple.getScore());
+                        // 可配置消费失败处理策略【直接抛弃、重试次数】
+                        if (element.getRetried() < element.getRetry() || -1 == element.getRetry()) {
+                            element.setRetried(element.getRetried() + 1);
+                            redisTemplate.opsForZSet().add(key, element, CalendarUtils.getCurrentTimeInMillis(element.getRetryDelay(), Calendar.MILLISECOND));
+                        }
                     }
                 } catch (Exception e) {
                     logger.error("处理器调用异常："+e.getMessage());
+                    // 可配置消费失败处理策略【直接抛弃、重试次数】
+                    if (element.getRetried() < element.getRetry() || -1 == element.getRetry()) {
+                        element.setRetried(element.getRetried() + 1);
+                        redisTemplate.opsForZSet().add(key, element, CalendarUtils.getCurrentTimeInMillis(element.getRetryDelay(), Calendar.MILLISECOND));
+                    }
                 }
             }
         },0, TimeUnit.MILLISECONDS);

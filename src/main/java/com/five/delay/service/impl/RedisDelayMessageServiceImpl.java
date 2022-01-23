@@ -6,6 +6,7 @@ import com.five.delay.conf.DelayPollModeConf;
 import com.five.delay.handler.DelayHandlerProcessor;
 import com.five.delay.handler.DelayMessage;
 import com.five.delay.handler.Element;
+import com.five.delay.handler.MethodDelayHandlerEndpoint;
 import com.five.delay.service.DelayMessageService;
 import com.five.delay.utils.CalendarUtils;
 import org.slf4j.Logger;
@@ -63,8 +64,13 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
             }
         }
         try {
-            Element value = new Element(delayMessage.getDelayName(), delayMessage.getValue());
-            redisTemplate.opsForZSet().add(String.valueOf(key), value, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
+            Element element = new Element(delayMessage.getDelayName(), delayMessage.getValue());
+            MethodDelayHandlerEndpoint delayHandlerEndpoint = delayHandlerProcessor.delayListenerEndpoints.get(delayMessage.getDelayName());
+            if (delayHandlerEndpoint != null) {
+                element.setRetry(delayHandlerEndpoint.getRetry());
+                element.setRetryDelay(delayHandlerEndpoint.getRetryDelay());
+            }
+            redisTemplate.opsForZSet().add(String.valueOf(key), element, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
             logger.info(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"延迟任务添加成功..."+delayMessage);
         } catch (Exception e) {
             throw new Exception("延迟任务添加失败..."+e.getMessage());

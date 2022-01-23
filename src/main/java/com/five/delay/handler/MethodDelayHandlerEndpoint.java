@@ -27,10 +27,21 @@ public class MethodDelayHandlerEndpoint {
      * 延迟任务消息存放的key
      */
     private String key;
+    /**
+     * 配置任务处理失败重试次数，-1表示一直重试
+     */
+    private int retry;
 
-    public MethodDelayHandlerEndpoint(String delayName, String key, Method method, Object obj) {
+    /**
+     * 配置任务处理失败重试间隔时间，单位为毫秒
+     */
+    private int retryDelay;
+
+    public MethodDelayHandlerEndpoint(String delayName, String key, int retry, int retryDelay, Method method, Object obj) {
         this.delayName = delayName;
         this.key = key;
+        this.retry = retry;
+        this.retryDelay = retryDelay;
         this.method = method;
         this.obj = obj;
     }
@@ -45,5 +56,13 @@ public class MethodDelayHandlerEndpoint {
 
     public String getKey() {
         return key;
+    }
+
+    public int getRetry() {
+        return retry;
+    }
+
+    public int getRetryDelay() {
+        return retryDelay;
     }
 }
