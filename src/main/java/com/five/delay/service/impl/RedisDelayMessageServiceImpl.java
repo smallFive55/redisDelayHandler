@@ -4,8 +4,8 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.five.delay.conf.DelayPollModeConf;
 import com.five.delay.handler.DelayHandlerProcessor;
-import com.five.delay.handler.DelayMessage;
-import com.five.delay.handler.Element;
+import com.five.delay.handler.bean.DelayMessage;
+import com.five.delay.handler.bean.DelayElement;
 import com.five.delay.handler.MethodDelayHandlerEndpoint;
 import com.five.delay.service.DelayMessageService;
 import com.five.delay.utils.CalendarUtils;
@@ -64,7 +64,7 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
             }
         }
         try {
-            Element element = new Element(delayMessage.getDelayName(), delayMessage.getValue());
+            DelayElement element = new DelayElement(delayMessage.getDelayName(), delayMessage.getValue());
             MethodDelayHandlerEndpoint delayHandlerEndpoint = delayHandlerProcessor.delayListenerEndpoints.get(delayMessage.getDelayName());
             if (delayHandlerEndpoint != null) {
                 element.setRetry(delayHandlerEndpoint.getRetry());

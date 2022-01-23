@@ -1,6 +1,6 @@
 package com.five.delay.service;
 
-import com.five.delay.handler.DelayMessage;
+import com.five.delay.handler.bean.DelayMessage;
 
 /**
  * @author luopeng

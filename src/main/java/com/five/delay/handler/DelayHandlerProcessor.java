@@ -4,6 +4,7 @@ import cn.hutool.core.thread.ThreadFactoryBuilder;
 import cn.hutool.core.util.StrUtil;
 import com.five.delay.annotation.DelayListener;
 import com.five.delay.conf.DelayPollModeConf;
+import com.five.delay.handler.bean.DelayElement;
 import com.five.delay.utils.CalendarUtils;
 import com.five.delay.utils.SpringContextUtils;
 import org.slf4j.Logger;
@@ -91,11 +92,11 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         return delayName;
     }
 
-    public void process(String delayName, String key, ZSetOperations.TypedTuple<Element>  typedTuple){
+    public void process(String delayName, String key, ZSetOperations.TypedTuple<DelayElement>  typedTuple){
         executorService.schedule(new Runnable() {
             @Override
             public void run() {
-                Element element = typedTuple.getValue();
+                DelayElement element = typedTuple.getValue();
                 try {
                     MethodDelayHandlerEndpoint delayHandlerEndpoint = delayListenerEndpoints.get(delayName);
                     Method method = delayHandlerEndpoint.getMethod();

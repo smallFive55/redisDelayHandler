@@ -1,4 +1,4 @@
-package com.five.delay.handler;
+package com.five.delay.handler.bean;
 
 import java.io.Serializable;
 
@@ -8,7 +8,7 @@ import java.io.Serializable;
  * @date 2022-01-02 22:43
  * @remark
  */
-public class Element implements Serializable {
+public class DelayElement implements Serializable {
 
     private String delayName;
 
@@ -28,15 +28,15 @@ public class Element implements Serializable {
      */
     private int retryDelay;
 
-    public Element(){
+    public DelayElement(){
     }
 
-    public Element(String delayName, Object value){
+    public DelayElement(String delayName, Object value){
         this.delayName = delayName;
         this.value = value;
     }
 
-    public Element(String delayName, Object value, int retry, int retryDelay){
+    public DelayElement(String delayName, Object value, int retry, int retryDelay){
         this.delayName = delayName;
         this.value = value;
         this.retry = retry;
