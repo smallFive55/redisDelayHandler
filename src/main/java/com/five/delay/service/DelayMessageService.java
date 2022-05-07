@@ -19,6 +19,7 @@ public interface DelayMessageService {
     /**
      * 发送延迟任务消息，默认模式
      * @param delayMessage
+     * @param pollMode
      * @throws Exception
      */
     void sendMessage(DelayMessage delayMessage, String pollMode) throws Exception;

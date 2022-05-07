@@ -1,6 +1,7 @@
 package com.five.delay.handler;
 
 import cn.hutool.core.thread.ThreadFactoryBuilder;
+import com.five.delay.conf.DelayPollModeConf;
 import com.five.delay.handler.bean.DelayElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,8 +12,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
 
-import java.util.Set;
-import java.util.TimerTask;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -29,20 +29,40 @@ import java.util.concurrent.*;
 public class DelayHandler {
     private static Logger logger = LoggerFactory.getLogger(DelayHandler.class);
 
-    // 本地轮询任务初始化延迟时长
+    /**
+     * 本地轮询任务初始化延迟时长
+     */
     private int initialDelay = 1000;
-    // 本地轮询间隙时长
+    /**
+     * 本地轮询间隙时长
+     */
     private int period = 1000;
-    // 本地轮询任务核心线程数
+    /**
+     * 本地轮询任务核心线程数
+     */
     private int corePoolSize = 10;
-    // 每次轮询任务从redis中取出数据条数
+    /**
+     * 每次轮询任务从redis中取出数据条数
+     */
     private int batchSize = 10;
-    // 本地轮询任务线程名前缀
+    /**
+     * 本地轮询任务线程名前缀
+     */
     private String threadPrefix = "sync-five.delayHandler-pool";
+
+    /**
+     * 自定义队列轮询频率(毫秒)
+     * delayRate:
+     *   key1: 1000
+     *   key2: 2000
+     */
+    private Map<String, Integer> delayRate = new LinkedHashMap<String, Integer>();
 
     private TimeUnit timeUnit = TimeUnit.MILLISECONDS;
 
-    // 针对本地轮询的key（即队列名），确定下一次轮询的元素个数
+    /**
+     * 针对本地轮询的key（即队列名），确定下一次轮询的元素个数
+     */
     private ConcurrentHashMap<String, Integer> zrangQuantityMap = new ConcurrentHashMap<String, Integer>();
 
     @Autowired
@@ -74,7 +94,7 @@ public class DelayHandler {
             }
         }
 
-        scheduler.schedule(new PollWorker(key), period, timeUnit);
+        scheduler.schedule(new PollWorker(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX + key), getPeriod(key), timeUnit);
     }
 
     class PollWorker extends TimerTask implements Runnable {
@@ -86,6 +106,7 @@ public class DelayHandler {
 
         @Override
         public void run() {
+            int rate = getPeriod(key.replace(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX, ""));
             try {
                 int repeat = 0;
                 int quantity = batchSize - 1;
@@ -94,23 +115,25 @@ public class DelayHandler {
                 }
                 try {
                     Set<ZSetOperations.TypedTuple<DelayElement>> zrangeWithScores = redisTemplate.opsForZSet().rangeWithScores(key, 0, quantity);
-                    // 判断元素是否超时  根据超时时间戳
                     if(zrangeWithScores !=null && !zrangeWithScores.isEmpty()){
                         for (int i = 0; i < zrangeWithScores.toArray().length; i++) {
                             // 获取任务元素信息
                             ZSetOperations.TypedTuple<DelayElement> typedTuple = (ZSetOperations.TypedTuple<DelayElement>) (zrangeWithScores.toArray()[i]);
-                            DelayElement element = typedTuple.getValue();
-                            // 判断本地服务是否能够消费该消息？主要是default、customize两钟模式下可能无法消费该消息的情况
-                            if (!delayHandlerProcessor.delays.contains(element.getDelayName())) {
-                                repeat++;
-                            } else if (typedTuple.getScore() <= System.currentTimeMillis()) {
-                                // 处理超时任务
-                                processDelayTask(key, typedTuple);
+                            // 先根据超时时间戳判断元素是否超时
+                            if (typedTuple.getScore() <= System.currentTimeMillis()) {
+                                DelayElement element = typedTuple.getValue();
+                                // 判断本地服务是否能够消费该消息，由于default、customize两种模式下可能包含本地服务无法消费的消息
+                                if (!delayHandlerProcessor.delays.contains(element.getDelayName())) {
+                                    repeat++;
+                                } else {
+                                    //处理超时任务
+                                    processDelayTask(key, typedTuple);
+                                }
                             }
                         }
                     } else {
-                        // 表示当前队列尾空队列，可以适当降低轮询评率
-                        logger.info(Thread.currentThread().getName()+"表示当前队列尾空队列，可以适当降低轮询频率");
+                        // TODO 表示当前队列尾空队列，可以适当降低轮询频率
+
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -123,7 +146,7 @@ public class DelayHandler {
                     zrangQuantityMap.remove(key);
                 }
             } finally {
-                scheduler.schedule(this, period, timeUnit);
+                scheduler.schedule(this, rate, timeUnit);
             }
         }
     }
@@ -150,6 +173,16 @@ public class DelayHandler {
         this.period = period;
     }
 
+    public int getPeriod(String key) {
+        if (null != key && !delayRate.isEmpty()){
+            Integer rate = delayRate.get(key);
+            if (rate != null && rate > 0) {
+                return rate;
+            }
+        }
+        return period;
+    }
+
     public void setCorePoolSize(int corePoolSize) {
         this.corePoolSize = corePoolSize;
     }
@@ -160,5 +193,9 @@ public class DelayHandler {
 
     public void setBatchSize(int batchSize) {
         this.batchSize = batchSize;
+    }
+
+    public void setDelayRate(Map<String, Integer> delayRate) {
+        this.delayRate = delayRate;
     }
 }

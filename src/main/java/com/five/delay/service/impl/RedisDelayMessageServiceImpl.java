@@ -63,13 +63,14 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
         } else {
             key = endpoint.getKey();
         }
+
         DelayElement element = new DelayElement(delayMessage.getDelayName(), delayMessage.getValue());
         if (endpoint != null) {
             element.setRetry(endpoint.getRetry());
             element.setRetryDelay(endpoint.getRetryDelay());
         }
         try {
-            redisTemplate.opsForZSet().add(String.valueOf(key), element, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
+            redisTemplate.opsForZSet().add(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX+key, element, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
             logger.info(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"延迟任务添加成功..."+delayMessage);
         } catch (Exception e) {
             throw new Exception("延迟任务添加失败..."+e.getMessage());

@@ -4,9 +4,14 @@ import org.springframework.stereotype.Component;
 
 import java.util.Calendar;
 
+/**
+ * @author luopeng
+ * @date 2021-12-31 17:10
+ * @remark
+ */
 @Component
 public class CalendarUtils {
-	
+
 	/**
 	 * 获得当前时间delay秒后的时间戳
 	 **/
@@ -15,7 +20,7 @@ public class CalendarUtils {
 		if(delay>0){
 			cal.add(Calendar.SECOND, delay);
 		}
-        return cal.getTimeInMillis();
+		return cal.getTimeInMillis();
 	}
 
 	/**

@@ -32,11 +32,19 @@ import java.util.concurrent.TimeUnit;
 public class DelayHandlerProcessor implements CommandLineRunner {
     private static Logger logger = LoggerFactory.getLogger(DelayHandlerProcessor.class);
 
-    // 延迟任务执行器，待优化
+    /**
+     * 延迟任务执行器
+     * TODO 待优化
+     * 根据每次轮询数据量(Delayhandler.batchSize) ，任务执行器存在并发情况。且多个人五同时轮询延迟任务时，压力更大
+     */
     private ScheduledThreadPoolExecutor executorService = new ScheduledThreadPoolExecutor(10, new ThreadFactoryBuilder() .setNamePrefix("test-").build());
-    // 本地 DelayListener 封装集合
+    /**
+     * 本地 DelayListener 封装集合
+     */
     protected Set<String> delays = new HashSet<String>();
-    // 根据本地 DelayListener 配置获取所有key
+    /**
+     * 根据本地 DelayListener 配置获取所有key
+     */
     private Set<String> keys = new HashSet<String>();
     @Autowired
     private RedisTemplate redisTemplate;
@@ -110,7 +118,7 @@ public class DelayHandlerProcessor implements CommandLineRunner {
         MethodDelayHandlerEndpoint endpoint = (MethodDelayHandlerEndpoint) redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, delayName);
         if (endpoint != null && StrUtil.isNotEmpty(endpoint.getConsumeContextId()) && !contextId.equals(endpoint.getConsumeContextId())){
             // 存在相同的delayName，且contextId不同时，错误。如果是由于主动修改了contextId导致，可以删除delay.application.map中指定的K/V
-            throw new Exception("延迟任务[" + delayName + "]在服务"+endpoint.getConsumeContextId()+"中已存在消费窗口！");
+            throw new Exception("延迟任务[" + delayName + "]在"+endpoint.getConsumeContextId()+"服务中已存在消费窗口！");
         }
         keys.add(key);
         endpoint = new MethodDelayHandlerEndpoint(delayName, key, retry, retryDelay, contextId, method.getName(), method.getParameterTypes(), bean);

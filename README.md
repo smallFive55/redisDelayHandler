@@ -9,10 +9,15 @@
 RabbitMQ受限于队列的先进先出策略，同一个队列中后进的消息就算延迟时间更短，也不能出队列到死信队列中执行延迟任务。
 
 #### 软件架构
+##### 3.1 任务轮询模式
 支持任务轮询的三种模型
 1.  public模型：公共轮询线程，key等于delay.task.public
 2.  customize模型：自定义轮询线程，获取数据后，根据任务类型分别执行处理器Handler
-3.  exclusive模型：独立轮询线程，获取数据后，调用各类型的处理器Handler执行任务
+3.  exclusive模型（默认）：独立轮询线程，获取数据后，调用各类型的处理器Handler执行任务
+
+##### 3.2 任务失败策略
+1.  任务处理失败，默认重试3次，重试间隔时间0毫秒
+2.  @DelayListener(retry=-1)时，将一直重试，直到成功为止
 
 #### 使用说明
 
@@ -32,6 +37,7 @@ RabbitMQ受限于队列的先进先出策略，同一个队列中后进的消息
 
 第二步：设置redis与redisDelayHandler的基本参数
 ```yaml
+# 若工程中已有自己的redisTemplate，不需要额外配置
 spring:
   redis:
     host: 127.0.0.1
@@ -49,6 +55,10 @@ delay:
     corePoolSize: 10    # 轮询任务核心线程数配置，默认10个
     batchSize: 10       # 每次轮询任务从redis中取出数据条数，默认10条
     threadPrefix: sync-five.delayHandler-pool  # 轮询任务线程名称前缀
+    delayRate:          # 根据key配置自定义轮训频率
+      public: 600        # public模型key等于"public"或key值（如果DelayListener注解中配置了key）
+      xxx: 210           # customize模型key等于DelayListener注解name或key的值
+      OID: 200           # exclusive模型key等于DelayListener注解name的值
 ```
 
 第三步：添加消息：调用DelayMessageService.sendMessage()方法
@@ -79,12 +89,18 @@ public class TestDelayHandler {
     public void process3(String value){
         System.out.println(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"-------->任务处理成功！ com.five.delay.temp.TestDelayHandler.process3   ==== " + value);
     }
+    
+    @DelayListener(name ="OID4", mode = DelayPollModeConf.MODE_CUSTOMIZE, task = "task.name", retry = 1, retryDelay = 1000)
+    public void process4(Order order){
+        System.out.println(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"-------->任务处理成功！ com.five.delay.temp.TestDelayHandler.process4   ==== " + order);
+        // process4() 方法抛出异常，则认为任务处理失败，1秒中后，继续重试
+    }
 }
 ```
 
 #### TODO LIST
 * [x] 支持三种任务轮询模式
 * [x] 支持消息类型多样化
-* [x] 任务失败处理机制（处理中）
-* [ ] 当前没有任务时，降低轮询的频率
+* [x] 任务失败处理机制
+* [x] 当前没有任务时，降低轮询的频率（处理中）
 * [ ] 轮询性能优化
