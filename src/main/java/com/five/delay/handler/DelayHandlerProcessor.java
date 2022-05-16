@@ -1,17 +1,13 @@
 package com.five.delay.handler;
 
 import cn.hutool.core.thread.ThreadFactoryBuilder;
-import cn.hutool.core.util.StrUtil;
 import com.five.delay.annotation.DelayListener;
 import com.five.delay.conf.DelayPollModeConf;
 import com.five.delay.handler.bean.DelayElement;
 import com.five.delay.utils.CalendarUtils;
-import com.five.delay.utils.SpringContextUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.ApplicationContext;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
@@ -29,7 +25,7 @@ import java.util.concurrent.TimeUnit;
  * @remark
  */
 @Component
-public class DelayHandlerProcessor implements CommandLineRunner {
+public class DelayHandlerProcessor {
     private static Logger logger = LoggerFactory.getLogger(DelayHandlerProcessor.class);
 
     /**
@@ -38,94 +34,9 @@ public class DelayHandlerProcessor implements CommandLineRunner {
      * 根据每次轮询数据量(Delayhandler.batchSize) ，任务执行器存在并发情况。且多个人五同时轮询延迟任务时，压力更大
      */
     private ScheduledThreadPoolExecutor executorService = new ScheduledThreadPoolExecutor(10, new ThreadFactoryBuilder() .setNamePrefix("test-").build());
-    /**
-     * 本地 DelayListener 封装集合
-     */
-    protected Set<String> delays = new HashSet<String>();
-    /**
-     * 根据本地 DelayListener 配置获取所有key
-     */
-    private Set<String> keys = new HashSet<String>();
+
     @Autowired
     private RedisTemplate redisTemplate;
-
-    @Override
-    public void run(String... args) throws Exception {
-        // 启动时通过Spring容器获取延迟任务
-        ApplicationContext applicationContext = SpringContextUtils.applicationContext;
-        logger.info("服务启动："+applicationContext.getId());
-
-        if(applicationContext != null){
-            Map<String,Object> beans = applicationContext.getBeansWithAnnotation(Component.class);
-            for(Object bean:beans.values()){
-                for (Method method : bean.getClass().getMethods()) {
-                    if (method.isAnnotationPresent(DelayListener.class)) {
-                        analyseDelay(method, bean);
-                    }
-                }
-            }
-
-            // 根据获取的延迟任务处理器，执行任务轮询
-            if (!keys.isEmpty()) {
-                DelayHandler handler = applicationContext.getBean(DelayHandler.class);
-                Iterator<String> iterator = keys.iterator();
-                while(iterator.hasNext()) {
-                    handler.poll(iterator.next());
-                }
-            }
-        }
-    }
-
-    /**
-     * 解析延迟任务方法配置
-     * @param method
-     * @param bean
-     * @return 任务名
-     * @throws Exception
-     */
-    private String analyseDelay(Method method, Object bean) throws Exception {
-        DelayListener delayListener = method.getAnnotation(DelayListener.class);
-        String delayName = delayListener.name();
-        String mode = delayListener.mode();
-        String key = delayListener.key();
-        int retry = delayListener.retry();
-        int retryDelay = delayListener.retryDelay();
-
-        // 1.delayName应该是独一无二的
-        if (delays.contains(delayName)) {
-            throw new Exception("不允许在本地配置相同的延迟任务名[\"+delayName+\"]");
-        }
-
-        if (StrUtil.isEmpty(mode) || mode.equals(DelayPollModeConf.MODE_EXCLUSIVE)) {
-            // 独立的轮询线程
-            key = delayName;
-        } else if (mode.equals(DelayPollModeConf.MODE_CUSTOMIZE)) {
-            if (StrUtil.isEmpty(key)) {
-                // 自定义模式，默认key等于任务名
-                key = delayName;
-            }
-        } else if (mode.equals(DelayPollModeConf.MODE_PUBLIC)) {
-            if (StrUtil.isEmpty(key)) {
-                // 公共轮询任务
-                key = DelayPollModeConf.PUBLIC_MODE_KEY;
-            }
-        } else {
-            throw new Exception("延迟任务["+delayName+"]mode类型配置错误！");
-        }
-        // 保证在不同的服务中，延迟任务全局只有唯一的消费窗口，允许在同一服务的不同节点消费
-        String contextId = SpringContextUtils.applicationContext.getId();
-
-        MethodDelayHandlerEndpoint endpoint = (MethodDelayHandlerEndpoint) redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, delayName);
-        if (endpoint != null && StrUtil.isNotEmpty(endpoint.getConsumeContextId()) && !contextId.equals(endpoint.getConsumeContextId())){
-            // 存在相同的delayName，且contextId不同时，错误。如果是由于主动修改了contextId导致，可以删除delay.application.map中指定的K/V
-            throw new Exception("延迟任务[" + delayName + "]在"+endpoint.getConsumeContextId()+"服务中已存在消费窗口！");
-        }
-        keys.add(key);
-        endpoint = new MethodDelayHandlerEndpoint(delayName, key, retry, retryDelay, contextId, method.getName(), method.getParameterTypes(), bean);
-        delays.add(delayName);
-        redisTemplate.opsForHash().put(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, delayName, endpoint);
-        return delayName;
-    }
 
     public void process(String key, ZSetOperations.TypedTuple<DelayElement>  typedTuple){
         executorService.schedule(new Runnable() {

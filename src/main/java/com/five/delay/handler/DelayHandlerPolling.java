@@ -12,13 +12,19 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
- *
+ * 延迟处理轮询器
  * @conditional
- *  如果当前环境存在redisTemplate Bean时，执行延迟任务处理器
+ *  如果当前环境存在redisTemplate Bean时执行
  * @author luopeng
  * @date 2021-12-30 16:34
  * @remark
@@ -26,8 +32,8 @@ import java.util.concurrent.*;
 @Component
 @ConditionalOnBean(name = "redisTemplate")
 @ConfigurationProperties(prefix = "delay.handler")
-public class DelayHandler {
-    private static Logger logger = LoggerFactory.getLogger(DelayHandler.class);
+public class DelayHandlerPolling {
+    private static Logger logger = LoggerFactory.getLogger(DelayHandlerPolling.class);
 
     /**
      * 本地轮询任务初始化延迟时长
@@ -69,6 +75,8 @@ public class DelayHandler {
     private RedisTemplate redisTemplate;
     @Autowired
     private DelayHandlerProcessor delayHandlerProcessor;
+    @Autowired
+    private DelayParser delayParser;
 
     /**
      * 任务轮询器线程池，调用处理线程执行具体任务
@@ -76,7 +84,7 @@ public class DelayHandler {
      */
     private ScheduledExecutorService scheduler;
 
-    public DelayHandler() {
+    public DelayHandlerPolling() {
 
     }
 
@@ -94,7 +102,10 @@ public class DelayHandler {
             }
         }
 
-        scheduler.schedule(new PollWorker(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX + key), getPeriod(key), timeUnit);
+        int period = getPeriod(key);
+        // getPeriod() 后，可获得每个key配置的最小轮询频率 [rate]
+        delayParser.setTaskRate(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX + key, period);
+        scheduler.schedule(new PollWorker(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX + key), period, timeUnit);
     }
 
     class PollWorker extends TimerTask implements Runnable {
@@ -116,14 +127,15 @@ public class DelayHandler {
                 try {
                     Set<ZSetOperations.TypedTuple<DelayElement>> zrangeWithScores = redisTemplate.opsForZSet().rangeWithScores(key, 0, quantity);
                     if(zrangeWithScores !=null && !zrangeWithScores.isEmpty()){
-                        for (int i = 0; i < zrangeWithScores.toArray().length; i++) {
+                        int length = zrangeWithScores.toArray().length;
+                        for (int i = 0; i < length; i++) {
                             // 获取任务元素信息
                             ZSetOperations.TypedTuple<DelayElement> typedTuple = (ZSetOperations.TypedTuple<DelayElement>) (zrangeWithScores.toArray()[i]);
                             // 先根据超时时间戳判断元素是否超时
                             if (typedTuple.getScore() <= System.currentTimeMillis()) {
                                 DelayElement element = typedTuple.getValue();
                                 // 判断本地服务是否能够消费该消息，由于default、customize两种模式下可能包含本地服务无法消费的消息
-                                if (!delayHandlerProcessor.delays.contains(element.getDelayName())) {
+                                if (!delayParser.delays.contains(element.getDelayName())) {
                                     repeat++;
                                 } else {
                                     //处理超时任务
@@ -132,8 +144,10 @@ public class DelayHandler {
                             }
                         }
                     } else {
-                        // TODO 表示当前队列尾空队列，可以适当降低轮询频率
-
+                        // 表示当前队列尾空队列，可以适当降低轮询频率
+                        // 空任务轮询频率 [emptyRate]
+                        int emptyRate = delayParser.calculationEmptyRate(key);
+                        rate = emptyRate;
                     }
                 } catch (Exception e) {
                     e.printStackTrace();

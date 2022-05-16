@@ -35,7 +35,7 @@ public @interface DelayListener {
      * public模型未配置key时，key 等于 delay.task.public
      * @return
      */
-    String key() default "";
+    String task() default "";
 
     /**
      * 配置任务处理失败重试次数，默认为3次。-1表示一直重试

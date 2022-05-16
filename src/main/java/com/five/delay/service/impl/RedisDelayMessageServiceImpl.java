@@ -1,8 +1,8 @@
 package com.five.delay.service.impl;
 
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.five.delay.conf.DelayPollModeConf;
+import com.five.delay.handler.DelayParser;
 import com.five.delay.handler.bean.DelayMessage;
 import com.five.delay.handler.bean.DelayElement;
 import com.five.delay.handler.MethodDelayHandlerEndpoint;
@@ -13,8 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-
-import java.util.Date;
 
 /**
  * @author luopeng
@@ -28,6 +26,8 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
 
     @Autowired
     private RedisTemplate redisTemplate;
+    @Autowired
+    private DelayParser delayParser;
 
     @Override
     public void sendMessage(DelayMessage delayMessage) throws Exception {
@@ -71,7 +71,8 @@ public class RedisDelayMessageServiceImpl implements DelayMessageService {
         }
         try {
             redisTemplate.opsForZSet().add(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX+key, element, CalendarUtils.getCurrentTimeInMillis(delayMessage.getDelay(), delayMessage.getCalendarTimeUnit()));
-            logger.info(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"延迟任务添加成功..."+delayMessage);
+            // 任务添加成功，判断更新key的最小超时时间 [delay]
+            delayParser.setTaskMinDelay(DelayPollModeConf.PUBLIC_MODE_KEY_PREFIX+key, delayMessage.getDelay());
         } catch (Exception e) {
             throw new Exception("延迟任务添加失败..."+e.getMessage());
         }

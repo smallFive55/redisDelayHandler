@@ -55,10 +55,10 @@ delay:
     corePoolSize: 10    # 轮询任务核心线程数配置，默认10个
     batchSize: 10       # 每次轮询任务从redis中取出数据条数，默认10条
     threadPrefix: sync-five.delayHandler-pool  # 轮询任务线程名称前缀
-    delayRate:          # 根据key配置自定义轮训频率
+    delayRate:          # 根据key配置自定义轮询频率
       public: 600        # public模型key等于"public"或key值（如果DelayListener注解中配置了key）
       xxx: 210           # customize模型key等于DelayListener注解name或key的值
-      OID: 200           # exclusive模型key等于DelayListener注解name的值
+      OID1: 200           # exclusive模型key等于DelayListener注解name的值
 ```
 
 第三步：添加消息：调用DelayMessageService.sendMessage()方法
@@ -75,7 +75,7 @@ delayMessageService.sendMessage(new DelayMessage<Order>("OID2", new Order(), 10)
 @Component
 public class TestDelayHandler {
 
-    @DelayListener(name ="OID", mode = DelayPollModeConf.MODE_PUBLIC)
+    @DelayListener(name ="OID1", mode = DelayPollModeConf.MODE_PUBLIC)
     public void process1(String value){
         System.out.println(DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss")+"-------->任务处理成功！ com.five.delay.temp.TestDelayHandler.process1   ==== " + value);
     }
@@ -102,5 +102,6 @@ public class TestDelayHandler {
 * [x] 支持三种任务轮询模式
 * [x] 支持消息类型多样化
 * [x] 任务失败处理机制
-* [x] 当前没有任务时，降低轮询的频率（处理中）
-* [ ] 轮询性能优化
+* [x] 当前没有任务时，降低轮询的频率
+* [x] 轮询性能优化(优化中)
+* [ ] 后台管理webAdmin
