@@ -12,14 +12,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.TimerTask;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * 延迟处理轮询器
@@ -69,7 +63,7 @@ public class DelayHandlerPolling {
     /**
      * 针对本地轮询的key（即队列名），确定下一次轮询的元素个数
      */
-    private ConcurrentHashMap<String, Integer> zrangQuantityMap = new ConcurrentHashMap<String, Integer>();
+    private ConcurrentHashMap<String, Integer> rangQuantityMap = new ConcurrentHashMap<String, Integer>();
 
     @Autowired
     private RedisTemplate redisTemplate;
@@ -121,8 +115,8 @@ public class DelayHandlerPolling {
             try {
                 int repeat = 0;
                 int quantity = batchSize - 1;
-                if (!zrangQuantityMap.isEmpty() && zrangQuantityMap.containsKey(key)) {
-                    quantity = zrangQuantityMap.get(key);
+                if (!rangQuantityMap.isEmpty() && rangQuantityMap.containsKey(key)) {
+                    quantity = rangQuantityMap.get(key);
                 }
                 try {
                     Set<ZSetOperations.TypedTuple<DelayElement>> zrangeWithScores = redisTemplate.opsForZSet().rangeWithScores(key, 0, quantity);
@@ -130,16 +124,16 @@ public class DelayHandlerPolling {
                         int length = zrangeWithScores.toArray().length;
                         for (int i = 0; i < length; i++) {
                             // 获取任务元素信息
-                            ZSetOperations.TypedTuple<DelayElement> typedTuple = (ZSetOperations.TypedTuple<DelayElement>) (zrangeWithScores.toArray()[i]);
+                            ZSetOperations.TypedTuple<DelayElement> tuple = (ZSetOperations.TypedTuple<DelayElement>) (zrangeWithScores.toArray()[i]);
                             // 先根据超时时间戳判断元素是否超时
-                            if (typedTuple.getScore() <= System.currentTimeMillis()) {
-                                DelayElement element = typedTuple.getValue();
+                            if (tuple.getScore() <= System.currentTimeMillis()) {
+                                DelayElement element = tuple.getValue();
                                 // 判断本地服务是否能够消费该消息，由于default、customize两种模式下可能包含本地服务无法消费的消息
-                                if (!delayParser.delays.contains(element.getDelayName())) {
+                                if (!DelayParser.delays.contains(element.getDelayName())) {
                                     repeat++;
                                 } else {
                                     //处理超时任务
-                                    processDelayTask(key, typedTuple);
+                                    processDelayTask(key, tuple);
                                 }
                             }
                         }
@@ -155,9 +149,9 @@ public class DelayHandlerPolling {
                 }
                 // 更新range quantity值
                 if (repeat > 0) {
-                    zrangQuantityMap.put(key, repeat + batchSize - 1);
+                    rangQuantityMap.put(key, repeat + batchSize - 1);
                 } else {
-                    zrangQuantityMap.remove(key);
+                    rangQuantityMap.remove(key);
                 }
             } finally {
                 scheduler.schedule(this, rate, timeUnit);
@@ -168,14 +162,14 @@ public class DelayHandlerPolling {
     /**
      * 处理超时消息
      * @param key
-     * @param typedTuple
+     * @param tuple
      */
-    void processDelayTask(String key, ZSetOperations.TypedTuple<DelayElement> typedTuple){
-        DelayElement element = typedTuple.getValue();
+    void processDelayTask(String key, ZSetOperations.TypedTuple<DelayElement> tuple){
+        DelayElement element = tuple.getValue();
         Long zrem = redisTemplate.opsForZSet().remove(key, element);
         if(zrem!=null && zrem>0){
             // 如果元素删除成功，表示任务被当前节点处理
-            delayHandlerProcessor.process(key, typedTuple);
+            delayHandlerProcessor.process(key, tuple);
         }
     }
 

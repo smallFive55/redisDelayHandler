@@ -14,8 +14,7 @@ import org.springframework.stereotype.Component;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.*;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * 通过Spring容器获取被 {@link DelayListener} 注解的延时任务处理器，并执行处理器调用
@@ -30,50 +29,58 @@ public class DelayHandlerProcessor {
 
     /**
      * 延迟任务执行器
-     * TODO 待优化
-     * 根据每次轮询数据量(Delayhandler.batchSize) ，任务执行器存在并发情况。且多个人五同时轮询延迟任务时，压力更大
+     * 根据本地延迟任务数DelayParser.delays，任务执行器存在并发情况。且多个人五同时轮询延迟任务时，压力更大
      */
-    private ScheduledThreadPoolExecutor executorService = new ScheduledThreadPoolExecutor(10, new ThreadFactoryBuilder() .setNamePrefix("test-").build());
+    private volatile ExecutorService executorService = null;
 
     @Autowired
     private RedisTemplate redisTemplate;
 
-    public void process(String key, ZSetOperations.TypedTuple<DelayElement>  typedTuple){
-        executorService.schedule(new Runnable() {
+    public void process(String key, ZSetOperations.TypedTuple<DelayElement>  tuple){
+
+        if (executorService == null) {
+            synchronized (this) {
+                if (executorService == null) {
+                    int delaySize = DelayParser.delays.size();
+                    executorService = new ThreadPoolExecutor(delaySize, delaySize,
+                            0L, TimeUnit.MILLISECONDS,
+                            new LinkedBlockingQueue<Runnable>(),
+                            new ThreadFactoryBuilder().setNamePrefix("delay-process-").build());
+                }
+            }
+        }
+
+        this.executorService.execute(new Runnable() {
             @Override
             public void run() {
-                DelayElement element = typedTuple.getValue();
+                DelayElement element = tuple.getValue();
                 try {
                     MethodDelayHandlerEndpoint delayHandlerEndpoint = (MethodDelayHandlerEndpoint) redisTemplate.opsForHash().get(DelayPollModeConf.DELAY_METADATA_HANDLER_MAP, element.getDelayName());
                     Method method = delayHandlerEndpoint.getObj().getClass().getMethod(delayHandlerEndpoint.getMethodName(), delayHandlerEndpoint.getParameterTypes());
                     try {
                         method.invoke(delayHandlerEndpoint.getObj(), element.getValue());
                     } catch (IllegalAccessException e) {
-                        e.printStackTrace();
-                        // 非法调用
-                        if (element.getRetried() < element.getRetry() || -1 == element.getRetry()) {
-                            element.setRetried(element.getRetried() + 1);
-                            redisTemplate.opsForZSet().add(key, element, CalendarUtils.getCurrentTimeInMillis(element.getRetryDelay(), Calendar.MILLISECOND));
-                        }
+                        logger.error("处理器调用异常："+e.getMessage());
+                        errorProcess(element);
                     } catch (InvocationTargetException e) {
-                        e.printStackTrace();
-                        // 调用异常
-                        // 可配置消费失败处理策略【直接抛弃、重试次数】
-                        if (element.getRetried() < element.getRetry() || -1 == element.getRetry()) {
-                            element.setRetried(element.getRetried() + 1);
-                            redisTemplate.opsForZSet().add(key, element, CalendarUtils.getCurrentTimeInMillis(element.getRetryDelay(), Calendar.MILLISECOND));
-                        }
+                        logger.error("处理器调用异常："+e.getMessage());
+                        errorProcess(element);
                     }
-                } catch (Exception e) {
+                } catch (NoSuchMethodException e) {
                     logger.error("处理器调用异常："+e.getMessage());
-                    // 可配置消费失败处理策略【直接抛弃、重试次数】
-                    if (element.getRetried() < element.getRetry() || -1 == element.getRetry()) {
-                        element.setRetried(element.getRetried() + 1);
-                        redisTemplate.opsForZSet().add(key, element, CalendarUtils.getCurrentTimeInMillis(element.getRetryDelay(), Calendar.MILLISECOND));
-                    }
+                    errorProcess(element);
                 }
             }
-        },0, TimeUnit.MILLISECONDS);
+
+            private void errorProcess(DelayElement element){
+                // 调用异常，可配置消费失败处理策略【直接抛弃、重试次数】
+                if (element.getRetried() < element.getRetry() || -1 == element.getRetry()) {
+                    element.setRetried(element.getRetried() + 1);
+                    redisTemplate.opsForZSet().add(key, element, CalendarUtils.getCurrentTimeInMillis(element.getRetryDelay(), Calendar.MILLISECOND));
+                }
+            }
+
+        });
     }
 
 }

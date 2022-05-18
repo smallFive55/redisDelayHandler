@@ -193,6 +193,10 @@ public class DefaultDelayParser implements DelayParser {
 
         // 空任务轮询频率算法
         int rate = (taskMinDelay - taskRate + 2);
+        if (rate < taskRate) {
+            // 空任务轮询频率不得小于正常轮训频率
+            rate = taskRate;
+        }
         int emptyRate = getEmptyRate(configList);
         if (rate < emptyRate) {
             logger.info("根据计算结果，重新计算emptyRate值："+rate+"，原emptyRate值为："+emptyRate);
